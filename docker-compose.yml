@@ -1,0 +1,48 @@
+version: "3.9"
+services:
+  api:
+    build: .
+    container_name: agentic_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT:-9123} --workers ${UVICORN_WORKERS:-2}
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    ports:
+      - "${HOST_PORT:-9123}:${APP_PORT:-9123}"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  worker:
+    build: .
+    container_name: agentic_worker
+    command: celery -A app.workers.celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-2}
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    depends_on: [redis]
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  beat:
+    build: .
+    container_name: agentic_beat
+    command: celery -A app.workers.celery_app.celery beat --loglevel=INFO
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    depends_on: [redis]
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentic_redis
+    ports:
+      - "${REDIS_HOST_PORT:-6387}:6379"
+    restart: unless-stopped
